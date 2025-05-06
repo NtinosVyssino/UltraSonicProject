@@ -4,20 +4,22 @@
 // Ultrasonic sensor pins
 const int trigPin = 9;
 const int echoPin = 10;
-
 const int BUZZER = 11;
 
 // Variables for distance measurement
 long duration;
-double fake_distance;
 double distance;
 unsigned long startMillis;
+unsigned long lcdMillis;
+boolean firstItteration = true;
 
 const int numberOfSamples = 31; // big data set and odd number to determine the MEDIAN
 double distance_values[numberOfSamples];
 
 // Set the LCD I2C address (0x27 or 0x3F)
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+//SDA PIN A4
+//SCL PIN A5
 
 void setup() {
   // Initialize ultrasonic sensor pins
@@ -26,18 +28,20 @@ void setup() {
 
   pinMode(BUZZER, OUTPUT);
 
-  lcd.init();         // Initialize the LCD
-  lcd.backlight();    // Turn on the backlight
+  lcd.init();         
+  lcd.backlight();    
   lcd.setCursor(0, 0);
+  lcd.print("Measuring...");
 
   startMillis = millis();
+  lcdMillis = millis();
 }
 
 void loop() {
 
-  fake_distance = getDistance();
+  getDistance(); //populates distance_values[]
   distance = getMedian();
-  distance = sqrt(sq(distance) - sq(4));
+  //distance = sqrt(sq(distance) - sq(4));
 
   unsigned long beepInterval = map(distance, 5, 50, 500, 3000); //Closer = higher pitch
 
@@ -45,47 +49,64 @@ void loop() {
   if (millis() - startMillis >= beepInterval) {
     startMillis = millis();
     tone(BUZZER, 1000, 50); // 50ms beep
-  
-  //LCD logic
-  static double previousDistance = -1;
-  if (abs(distance - previousDistance ) > 0.1){
-    previousDistance = distance;
-    lcd.setCursor(0, 0);
-    lcd.print("Dist: ");
-    lcd.print((double)distance, 2);
-    lcd.print(" cm    ");
-  }
   }
 
+  //LCD logic
+  static double previousDistance = -1;
+
+  if (millis() - lcdMillis >= 500){
+    lcdMillis = millis();
+    if (abs(distance - previousDistance ) > 0.1){
+      previousDistance = distance;
+      lcd.setCursor(0, 0);
+      lcd.print("Dist: ");
+      lcd.print((double)distance, 2);
+      lcd.print(" cm    ");
+    }
+  }
+  
   delay(25);
 }
 
 double getDistance() {
+  int validSamples = 0;
+  int attempts = 0;
+  const int maxAttempts = numberOfSamples * 3; // up to 3 tries per sample
+  double lastGood = -1;
 
-  double sum = 0;
+  while (validSamples < numberOfSamples && attempts < maxAttempts) {
+    attempts++;
 
-  for (int i = 0; i < numberOfSamples; i++) {
-      // Send ultrasonic pulse
-      digitalWrite(trigPin, LOW);
-      delayMicroseconds(2);
-      digitalWrite(trigPin, HIGH);
-      delayMicroseconds(10);
-      digitalWrite(trigPin, LOW);
+    // Trigger pulse
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
 
-      // Measure distance
-      duration = pulseIn(echoPin, HIGH, 25000); // 25ms time-out to avoid long waits
-      distance = duration * 0.034 / 2;
-      if (distance > 2 && distance < 400) {
-        distance_values[i] = distance;
-        sum += distance;
-      }
-      else {
-        distance_values[i] = 0;
+    // Read echo
+    duration = pulseIn(echoPin, HIGH, 25000); // ~50 cm max
+    double dist = duration * 0.034 / 2;
+
+    // Validate reading
+    if (dist >= 2 && dist <= 400) { // 2cm - 4m
+      if (lastGood < 0 || abs(dist - lastGood) <= 2) {
+        distance_values[validSamples++] = dist;
+        lastGood = dist;
       }
     }
-    
-    return sum / numberOfSamples;
+  }
+
+  // If not enough samples collected, fall back to average of what we have
+  if (validSamples < numberOfSamples) {
+    for (int i = validSamples; i < numberOfSamples; i++) {
+      distance_values[i] = lastGood;
+    }
+  }
+
+  return validSamples > 0 ? lastGood : 0;
 }
+
 
 double getMedian() {
 
