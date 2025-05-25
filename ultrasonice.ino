@@ -11,7 +11,6 @@ long duration;
 double distance;
 unsigned long startMillis;
 unsigned long lcdMillis;
-boolean firstItteration = true;
 
 const int numberOfSamples = 31; // big data set and odd number to determine the MEDIAN
 double distance_values[numberOfSamples];
@@ -115,6 +114,15 @@ double getMedian() {
 
   // Find the Median
   return distance_values[(int)(numberOfSamples / 2)];
+}
+
+double getMean() {
+  double sum = 0;
+  for (int i = 0; i < numberOfSamples; i++) {
+    sum = sum + distance_values[i];
+  }
+
+  return sum / numberOfSamples;
 }
 
 // Quick Sort function
