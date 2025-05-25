@@ -11,7 +11,6 @@ long duration;
 double distance;
 unsigned long startMillis;
 unsigned long lcdMillis;
-boolean firstItteration = true;
 
 const int numberOfSamples = 31; // big data set and odd number to determine the MEDIAN
 double distance_values[numberOfSamples];
